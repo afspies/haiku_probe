@@ -9,4 +9,4 @@ flake8:
 	@echo "flake8 passed"
 
 test:
-	py.test --pyargs haiku_template --cov-report term-missing --cov=haiku_template
+	py.test --pyargs haiku_probe --cov-report term-missing --cov=haiku_probe

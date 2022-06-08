@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import numpy.testing as npt
 import jax.numpy as jnp
-import haiku_template as sb
+import haiku_probe as sb
 
 data_path = op.join(sb.__path__[0], 'data')
 

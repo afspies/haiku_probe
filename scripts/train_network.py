@@ -1,4 +1,4 @@
-import haiku_template as sb
+import haiku_probe as sb
 from pathlib import Path
 import os.path as op
 

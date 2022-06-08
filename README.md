@@ -1,4 +1,4 @@
-## haiku_template
+## haiku_probe
 Based on shablona.
 
 Implement a number of helpful wrappers for Haiku which facilitate:
@@ -10,11 +10,11 @@ Implement a number of helpful wrappers for Haiku which facilitate:
 
 The project has the following structure:
 
-    haiku_template/
+    haiku_probe/
       |- README.md
-      |- haiku_template/
+      |- haiku_probe/
          |- __init__.py
-         |- haiku_template.py
+         |- haiku_probe.py
          |- due.py
          |- data/
             |- ...
@@ -41,7 +41,7 @@ The project has the following structure:
 
 In the following sections we will examine these elements one by one. First,
 let's consider the core of the project. This is the code inside of
-`haiku_template/haiku_template.py`. The code provided in this file is intentionally rather
+`haiku_probe/haiku_probe.py`. The code provided in this file is intentionally rather
 simple. It implements some simple curve-fitting to data from a psychophysical
 experiment. It's not too important to know what it does, but if you are really
 interested, you can read all about it
@@ -49,15 +49,15 @@ interested, you can read all about it
 
 ### Module code
 
-We place the module code in a file called `haiku_template.py` in directory called
-`haiku_template`. This structure is a bit confusing at first, but it is a simple way
-to create a structure where when we type `import haiku_template as sb` in an
+We place the module code in a file called `haiku_probe.py` in directory called
+`haiku_probe`. This structure is a bit confusing at first, but it is a simple way
+to create a structure where when we type `import haiku_probe as sb` in an
 interactive Python session, the classes and functions defined inside of the
-`haiku_template.py` file are available in the `sb` namespace. For this to work, we
+`haiku_probe.py` file are available in the `sb` namespace. For this to work, we
 need to also create a file in `__init__.py` which contains code that imports
 everything in that file into the namespace of the project:
 
-    from .haiku_template import *
+    from .haiku_probe import *
 
 In the module code, we follow the convention that all functions are either
 imported from other places, or are defined in lines that precede the lines that
@@ -66,7 +66,7 @@ you see some name, the definition of that name will appear earlier in the file,
 either as a function/variable definition, or as an import from some other module
 or package.
 
-In the case of the haiku_template module, the main classes defined at the bottom of
+In the case of the haiku_probe module, the main classes defined at the bottom of
 the file make use of some of the functions defined in preceding lines.
 
 Remember that code will be probably be read more times than it will be written.
@@ -87,13 +87,13 @@ data that you are analyzing is too large, and cannot be effectively
 tracked with github, you might still want to store some data for
 testing purposes.
 
-Either way, you can create a `haiku_template/data` folder in which you can
+Either way, you can create a `haiku_probe/data` folder in which you can
 organize the data. As you can see in the test scripts, and in the
 analysis scripts, this provides a standard file-system location for
 the data at:
 
     import os.path as op
-    import haiku_template as sb
+    import haiku_probe as sb
     data_path = op.join(sb.__path__[0], 'data')
 
 
@@ -123,7 +123,7 @@ in your code.
 We recommend using the ['pytest'](http://pytest.org/latest/) library for
 testing. The `py.test` application traverses the directory tree in which it is
 issued, looking for files with the names that match the pattern `test_*.py`
-(typically, something like our `haiku_template/tests/test_slopfield.py`). Within each
+(typically, something like our `haiku_probe/tests/test_slopfield.py`). Within each
 of these files, it looks for functions with names that match the pattern
 `test_*`. Typically each function in the module would have a corresponding test
 (e.g. `test_transform_data`). This is sometimes called 'unit testing', because
@@ -131,7 +131,7 @@ it independently tests each atomic unit in the software. Other tests might run a
 more elaborate sequence of functions ('end-to-end testing' if you run through
 the entire analysis), and check that particular values in the code evaluate to
 the same values over time. This is sometimes called 'regression testing'. We
-have one such test in `haiku_template/tests/test_slopfield.py` called
+have one such test in `haiku_probe/tests/test_slopfield.py` called
 `test_params_regression`. Regressions in the code are often canaries in the coal
 mine, telling you that you need to examine changes in your software
 dependencies, the platform on which you are running your software, etc.
@@ -149,16 +149,16 @@ handling `numpy` arrays, and they allow to specify the tolerance of the
 comparison through the `decimal` key-word argument.
 
 To run the tests on the command line, change your present working directory to
-the top-level directory of the repository (e.g. `/Users/arokem/code/haiku_template`),
+the top-level directory of the repository (e.g. `/Users/arokem/code/haiku_probe`),
 and type:
 
-    py.test haiku_template
+    py.test haiku_probe
 
 This will exercise all of the tests in your code directory. If a test fails, you
 will see a message such as:
 
 
-    haiku_template/tests/test_slopfield.py .F...
+    haiku_probe/tests/test_slopfield.py .F...
 
     =================================== FAILURES ===================================
     ________________________________ test_cum_gauss ________________________________
@@ -182,7 +182,7 @@ will see a message such as:
     E        ACTUAL: 0.15865525393145707
     E        DESIRED: 0.15999999999999998
 
-    haiku_template/tests/test_slopfield.py:49: AssertionError
+    haiku_probe/tests/test_slopfield.py:49: AssertionError
     ====================== 1 failed, 4 passed in 0.82 seconds ======================
 
 This indicates to you that a test has failed. In this case, the calculation is
@@ -215,9 +215,9 @@ figure out how to install your software on a particular system. For a
 small project such as this one, managing installation of the software
 modules and the data is rather simple.
 
-A `haiku_template/version.py` contains all of the information needed for the
+A `haiku_probe/version.py` contains all of the information needed for the
 installation and for setting up the [PyPI
-page](https://pypi.python.org/pypi/haiku_template) for the software. This
+page](https://pypi.python.org/pypi/haiku_probe) for the software. This
 also makes it possible to install your software with using `pip` and
 `easy_install`, which are package managers for Python software. The
 `setup.py` file reads this information from there and passes it to the
@@ -240,9 +240,9 @@ to your project about the degree of test coverage of your project.
 You will need a .travis.yml file in your repo. This file contains the
 configuration of your testing environment. This includes the different
 environments in which you will test the source code (for example, we test
-`haiku_template` against Python 2.7, Python 3.3 and Python 3.4). It includes steps
+`haiku_probe` against Python 2.7, Python 3.3 and Python 3.4). It includes steps
 that need to be taken before installation of the software. For example,
-installation of the software dependencies. For `haiku_template`, we use the
+installation of the software dependencies. For `haiku_probe`, we use the
 [`Miniconda`](http://conda.pydata.org/miniconda.html) software distribution (not
 to be confused with [`Anaconda`](https://store.continuum.io/cshop/anaconda/),
 though they are similar and both produced by Continuum).
@@ -345,7 +345,7 @@ with these elements.
 For example, this repository contains an [IPython notebook] that reads
 in some data, and creates a figure. Maybe this is *Figure 1* from some
 future article? You can see this notebook fully rendered
-[here](https://github.com/uwescience/haiku_template/blob/master/scripts/Figure1.ipynb).
+[here](https://github.com/uwescience/haiku_probe/blob/master/scripts/Figure1.ipynb).
 
 
 ### Git Configuration
@@ -363,7 +363,7 @@ with this repository, and which you could extend further:
   `git shortlog --help`)
 
 
-### Using `haiku_template` as a template
+### Using `haiku_probe` as a template
 
 Let's assume that you want to create a small scientific Python project
 called `smallish`. Maybe you already have some code that you are
@@ -371,7 +371,7 @@ interested in plugging into the module file, and some ideas about what
 the tests might look like.
 
 To use this repository as a template, click the green "use this template"
-button on the front page of the "haiku_template" repository.
+button on the front page of the "haiku_probe" repository.
 
 In "Repository name" enter the name of your project. For example, enter 
 `smallish` here. After that, you can hit the "Create repository from template" 
@@ -379,31 +379,31 @@ button.
 
 You should then be able to clone the new repo into your machine. You will want
 to change the names of the files. For example, you will want to move
-`haiku_template/haiku_template.py` to be called `smallish/smallish.py`
+`haiku_probe/haiku_probe.py` to be called `smallish/smallish.py`
 
-	git mv haiku_template smallish
-	git mv smallish/haiku_template.py smallish/smallish.py
+	git mv haiku_probe smallish
+	git mv smallish/haiku_probe.py smallish/smallish.py
 	git mv smallish/tests/test_slopfield.py smallish/tests/test_smallish.py
 
 Make a commit recording these changes. Something like:
 
-	git commit -a -m"Moved names from `haiku_template` to `smallish`"
+	git commit -a -m"Moved names from `haiku_probe` to `smallish`"
 
 You will probably want to remove all the example data:
 
 	git rm smallish/data/*
-	git commit -a -m"Removed example `haiku_template` data"
+	git commit -a -m"Removed example `haiku_probe` data"
 
 Possibly, you will want to add some of your own data in there.
 
-You will want to edit a few more places that still have `haiku_template` in them. Type
+You will want to edit a few more places that still have `haiku_probe` in them. Type
 the following to see where all these files are:
 
-	git grep haiku_template
+	git grep haiku_probe
 
-You can replace `haiku_template` for `smallish` quickly with:
+You can replace `haiku_probe` for `smallish` quickly with:
 
-	git grep -l 'haiku_template' | xargs sed -i 's/haiku_template/smallish/g'
+	git grep -l 'haiku_probe' | xargs sed -i 's/haiku_probe/smallish/g'
 
 This very file (README.md) should be edited to reflect what your project is
 about.
@@ -416,8 +416,8 @@ The `.coveragerc` file contains a few mentions of that name, as well as the
 `.travis.yml` file. This one will also have to be edited to reflect your PyPI
 credentials (see [above](### Distribution)).
 
-Edit all the mentions of `haiku_template` in the `haiku_template/__init__.py` file, and in
-the `haiku_template/version.py` file as well.
+Edit all the mentions of `haiku_probe` in the `haiku_probe/__init__.py` file, and in
+the `haiku_probe/version.py` file as well.
 
 Finally, you will probably want to change the copyright holder in the `LICENSE`
 file to be you. You can also replace the text of that file, if it doesn't match
