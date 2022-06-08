@@ -1,0 +1,1 @@
+from haiku_template.modules.networks.base_module import HaikuAutoInit

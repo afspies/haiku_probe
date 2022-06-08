@@ -1,0 +1,18 @@
+# Numerical Computing
+numpy
+jax
+# jaxlib[cuda11_cudnn82]
+# pip install --upgrade "jax[cuda11_cudnn82]" -f https://storage.googleapis.com/jax-releases/jax_releases.html
+scipy
+pandas
+
+# Visualization
+matplotlib
+
+# Data Loading
+torch
+# ffcv 
+
+# Deep learning
+optax
+dm-haiku
