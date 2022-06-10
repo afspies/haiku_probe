@@ -9,10 +9,11 @@ from haiku_probe.modules.utils import split_treemap, rename_treemap_branches
 import contextlib
 
 # Standard haiku forward function
-def forward_fn(x, training, analysis, net=None, cfg=None, prober=contextlib.nullcontext()):
-    with prober(): 
+def forward_fn(x, training, analysis, net=None, cfg=None, prober=None):
+    output = []
+    with prober(output) if prober is not None else contextlib.nullcontext(): 
         out = net(cfg)(x, training, analysis)
-    return  out
+    return output
 
 class AbstractNetwork(hk.Module):
     """
@@ -92,7 +93,7 @@ class HaikuAutoInit(object):
     @partial(jax.jit, static_argnums=(0,))
     def __call__(self, x, training=True, analysis=False):
         out = self.network.apply(self.params, self.state, next(self.rngseq), x, training, analysis)
-        return out 
+        return out
 
 
 
@@ -109,10 +110,14 @@ class SimpleLinear(TestingNetwork):
 
 
 @contextlib.contextmanager
-def prober(readers, writers):
+def prober(readers, writers, output):
     ctx_managers = []
-    for writer in writers:
-        ctx_managers.append(hk.intercept_methods(writer))
+    if readers:
+        for reader in readers:
+            ctx_managers.append(hk.custom_getter(reader(output)))
+    if writers:
+        for writer in writers:
+            ctx_managers.append(hk.intercept_methods(writer))
 
     with contextlib.ExitStack() as stack:
         for mgr in ctx_managers:
@@ -120,28 +125,54 @@ def prober(readers, writers):
         try:
             yield [stack] # forward function is getting called in here
         finally:
-            print('Pass complete')
+            pass
+            # print('Pass complete')
 
-def my_interceptor(next_f, args, kwargs, context):
-    if (type(context.module) is not hk.BatchNorm
-        or context.method_name != "__call__"):
-        print('called_intercetpro on', type(context.module))
-        if hasattr(context.module, 'name'):
-            print(f'\t interceptor on {context.module.name}')
-        # We ignore methods other than BatchNorm.__call__.
-        return next_f(*args, **kwargs)
 
-    def cast_if_array(x):
-        if isinstance(x, jnp.ndarray):
-            x = x.astype(jnp.float32)
-        return x
+def create_probe(user_context):
+    def read_probe(output):
+        """
+        one way of getting a read probe is to use an interceptor to specify that activations are stored
+        as state variables, and then use a getter to read these out
+        """
+        def bf16_getter(next_getter, value, context, output):
+            print(context)
+            value = value.astype(jnp.bfloat16)
+            output.append(value)
+            return next_getter(value)
+        return partial(bf16_getter, output=output)
+    return read_probe
 
-probes = my_interceptor
-prober = partial(prober, None, [probes])
+
+    def general_interceptor(next_f, args, kwargs, context):
+        if isinstance(user_context, str): # Targeting a specific layer
+            pass
+        elif issubclass(user_context, hk.Module): # Targeting all modules of a specific form - this will require some layer tracking method
+            if (type(context.module) is not user_context or context.method_name != "__call__"):
+                if hasattr(context.module, 'name'):
+                    print(f'\t interceptor on {context.module.name} ', end=' ')
+                # We ignore methods other than BatchNorm.__call__.
+                return next_f(*args, **kwargs)
+
+        def cast_if_array(x):
+            print(x.shape)
+            if isinstance(x, jnp.ndarray):
+                x = x.astype(jnp.float32)
+            return x
+        
+        args, kwargs = jax.tree_map(cast_if_array, (args, kwargs))
+        out = next_f(*args, **kwargs)
+        return out
+
+    return general_interceptor
+
+
+probes = create_probe(hk.Linear)
+prober = partial(prober, [probes], None)
 model = HaikuAutoInit(cfg, SimpleLinear, prober=prober)
 rng_key = hk.PRNGSequence(12392)
 out, state = model(jax.random.normal(next(rng_key), (28, 3)))
-print(out.shape)
+print('\n', out, '\n') 
 
 
     # def load(self, params):
