@@ -10,10 +10,13 @@ import contextlib
 
 # Standard haiku forward function
 def forward_fn(x, training, analysis, net=None, cfg=None, prober=None):
-    output = []
-    with prober(output) if prober is not None else contextlib.nullcontext(): 
-        out = net(cfg)(x, training, analysis)
-    return output
+    out = {}
+    with prober(out) if prober is not None else contextlib.nullcontext(): 
+        net_out = net(cfg)(x, training, analysis)
+        if not isinstance(net_out, dict):
+            net_out = {'out': net_out}
+        out.update(net_out) 
+    return out
 
 class AbstractNetwork(hk.Module):
     """
@@ -71,6 +74,7 @@ class TestingNetwork(AbstractNetwork):
         pass
     
 
+import optax
 class HaikuAutoInit(object):
     # This class will automatically initalize itself with a standard 
     # forward function etc
@@ -84,40 +88,76 @@ class HaikuAutoInit(object):
         self.rngseq = hk.PRNGSequence(cfg['seed'])
         self.network = hk.transform_with_state(partial(forward_fn, net=network_class, cfg=cfg, prober=prober))
         
-        jitted_init = jax.jit(partial(self.network.init, training=True, analysis=False))
+        # jitted_init = jax.jit(partial(self.network.init, training=True, analysis=False))
+        jitted_init = partial(self.network.init, training=True, analysis=False)
         trainable_params, trainable_state = jitted_init(next(self.rngseq), jnp.zeros(network_class.input_dims))
 
         self.params = trainable_params
         self.state = trainable_state
+
+        # Initialize optimizer and loss function
+        opt_init, self.opt_update =  optax.adam(1e-4) #model_class.get_optimizer(cfg_model.training)
+        self.opt_state = opt_init(trainable_params)
+        self.loss_fn = lambda x, y, _1, _2: (x**2).mean() #model_class.get_loss(cfg_model.training)
+        # -y
     
-    @partial(jax.jit, static_argnums=(0,))
+    # @partial(jax.jit, static_argnums=(0,))x
     def __call__(self, x, training=True, analysis=False):
         out = self.network.apply(self.params, self.state, next(self.rngseq), x, training, analysis)
         return out
 
+    def train(self, batch):
+        return self.update(None, self.params, None, self.state, next(self.rngseq), self.opt_state, batch)
 
+    # @partial(jax.jit, static_argnums=(0,)) 
+    def update(self, frozen_params, trainable_params, frozen_state, trainable_state, rng_key, opt_state, batch):
+        """Learning rule (stochastic gradient descent)."""
+        train_grads, (losses, trainable_state, other) = jax.grad(self._loss, 1, has_aux=True)(frozen_params, trainable_params, 
+                                                                                        frozen_state, trainable_state,
+                                                                                        rng_key, batch)
+        train_grads, write_grads = self._apply_gradient_probes(train_grads)
+        if write_grads: other['grad_probes'] = write_grads
+        updates, opt_state = self.opt_update(train_grads, opt_state, trainable_params)
+        trainable_params = optax.apply_updates(trainable_params, updates)
+        # other = (other, train_grads)
+        return losses, other, (frozen_params, trainable_params), (frozen_state, trainable_state), opt_state
+
+    def _loss(self, frozen_params, trainable_params, frozen_state, trainable_state, rng_key, batch):
+        params = trainable_params if frozen_params is None else hk.data_structures.merge(frozen_params, trainable_params)
+        state = trainable_state if frozen_state is None else hk.data_structures.merge(frozen_state, trainable_state)
+        x, state = self.network.apply(params, state, rng_key, batch, training=True, analysis=False)
+        loss = self.loss_fn(x['out'], batch, rng_key, params)
+        #other should be a dict of k: values where values get logged to wandb
+        return loss, (loss, state, x) #if 'other' in x.keys() else N
+
+    def _apply_gradient_probes(self, probes, grads):
+        jax.tree.filter
+        for probe in probes:
+            grads = probe(grads)
+        return grads
+# ---------------------------------------------------------------------------------------------------------------------
 
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 cfg = {'linear':16, 'seed':42}
 class SimpleLinear(TestingNetwork):
-    input_dims = (64, 3)
+    input_dims = (1, 3)
     def __init__(self, cfg, name=None):
         super().__init__(cfg, name=name)
         self.cfg = cfg
     def __call__(self, x, analysis, debug):
-        return hk.Linear(self.cfg['linear'])(x)
-
+        return hk.Linear(self.cfg['linear'], with_bias=False)(x)
 
 @contextlib.contextmanager
-def prober(readers, writers, output):
+def probe_manager(probes, output):
     ctx_managers = []
-    if readers:
-        for reader in readers:
-            ctx_managers.append(hk.custom_getter(reader(output)))
-    if writers:
-        for writer in writers:
-            ctx_managers.append(hk.intercept_methods(writer))
+    for probe in probes:
+        if isinstance(probe, hk.GetterContext):
+            ctx_managers.append(hk.custom_getter(probe(output)))
+        elif isinstance(probe, hk.SetterContext):
+            ctx_managers.append(hk.custom_setter(probe(output)))
+        else:
+            ctx_managers.append(hk.intercept_methods(probe(output)))
 
     with contextlib.ExitStack() as stack:
         for mgr in ctx_managers:
@@ -126,53 +166,138 @@ def prober(readers, writers, output):
             yield [stack] # forward function is getting called in here
         finally:
             pass
-            # print('Pass complete')
 
+def context_matched(user_context, prober_context):
+    if isinstance(prober_context,  (hk.GetterContext, hk.SetterContext)): # Using Getter
+        pass
+    else: # Using Interceptor
+        if prober_context.method_name != '__call__':
+            return False
 
-def create_probe(user_context):
-    def read_probe(output):
+    # Targeting a specific layer
+    if isinstance(user_context, str): 
+        return user_context not in prober_context.full_name
+
+    # Targeting all modules of a specific form 
+    if issubclass(user_context, hk.Module): 
+        return user_context == type(prober_context.module)
+
+    # if hasattr(prober_context.module, 'name'):
+        # print(f'\t interceptor on {prober_context.module.name} ', end=' ')
+
+@partial(jax.custom_vjp, nondiff_argnums=(1,))
+def print_f(x, fun):
+    return fun(x)
+
+def print_f_fwd(x, fun):
+    print('fwd')
+    return print_f(x, fun), x 
+
+def print_f_bwd(fun, res, grad):
+    x = res
+    print('bwd', grad)
+    return fun(x),
+
+print_f.defvjp(print_f_fwd, print_f_bwd)
+
+def general_interceptor(applied_function, user_context, ordering, # Apply Closure
+                        next_f, args, kwargs, context): # Intercepted at runtime
+    if not context_matched(user_context, context):
+        return next_f(*args, **kwargs)
+    
+    print(args)
+
+    if ordering == 'before':
+        args, kwargs = jax.tree_map(partial(applied_function, context=context), (args, kwargs))
+        x = args[0]
+        x = print_f(x, lambda x: x)
+        args = (x, *args[1:])
+    elif ordering == 'after': 
+        #! only able to read after atm
+        #! Think this duplicates operations - automatic interceptor generation for next op is the best option
+        #! But will be implementationally painful
         """
-        one way of getting a read probe is to use an interceptor to specify that activations are stored
-        as state variables, and then use a getter to read these out
+        Slightly complicated - have access to next interceptor and current op
+        can call current op, but must skip next interceptor's op call
         """
-        def bf16_getter(next_getter, value, context, output):
-            print(context)
-            value = value.astype(jnp.bfloat16)
-            output.append(value)
-            return next_getter(value)
-        return partial(bf16_getter, output=output)
-    return read_probe
+        out = context.orig_method(*args, **kwargs)
+        jax.tree_map(partial(applied_function, context=context), (out))
 
+    # return print_f(args[0], next_f) #, *args[1:], **kwargs)
+    return next_f(*args, **kwargs)
+    
+def create_probe(user_context, probe_type, target_type, intercept_fn=None, execution_order='before'):
 
-    def general_interceptor(next_f, args, kwargs, context):
-        if isinstance(user_context, str): # Targeting a specific layer
+    if target_type in ['params', 'state']:
+        if probe_type == 'r':
+            def read_probe(output):
+                # Able to get weights and state, but not activations
+                def param_getter(next_getter, value, context, out=None):
+                    if context_matched(user_context, context):
+                        out[context.full_name] = value.astype(jnp.float16)
+                    return next_getter(value)
+                return partial(param_getter, out=output)
+            return read_probe
+        if probe_type == 'w':
             pass
-        elif issubclass(user_context, hk.Module): # Targeting all modules of a specific form - this will require some layer tracking method
-            if (type(context.module) is not user_context or context.method_name != "__call__"):
-                if hasattr(context.module, 'name'):
-                    print(f'\t interceptor on {context.module.name} ', end=' ')
-                # We ignore methods other than BatchNorm.__call__.
-                return next_f(*args, **kwargs)
+    
+    if target_type == 'gradients':
+        if probe_type == 'r':
+            def read_probe(output):
+                def param_setter(next_setter, value, orig_dtype, context, out=None):
+                    if not hk.running_init():
+                        if context_matched(user_context, context):
+                            out[context.module.name] = value#.astype(jnp.float16)
+                    return next_setter(*value)
+                return partial(param_setter, out=output)
+            return read_probe
 
-        def cast_if_array(x):
-            print(x.shape)
-            if isinstance(x, jnp.ndarray):
-                x = x.astype(jnp.float32)
-            return x
-        
-        args, kwargs = jax.tree_map(cast_if_array, (args, kwargs))
-        out = next_f(*args, **kwargs)
-        return out
-
-    return general_interceptor
+        if probe_type == 'w':
+            def write_probe(output):
+                def param_setter(next_setter, value, orig_dtype, context, out=None):
+                    if not hk.running_init():
+                        if context_matched(user_context, context):
+                            out[context.module.name] = value
+                    return next_setter(*value)
 
 
-probes = create_probe(hk.Linear)
-prober = partial(prober, [probes], None)
+    if target_type in ['activations']:
+        if target_type == 'activations':
+            if probe_type == 'r':
+                def intercept_fn(x, out=None, context=None):
+                    out[context.module.name] = x
+                    return x
+            if probe_type == 'w':
+                assert intercept_fn is not None, "Must provide interceptor function if modifying activations"
+        else:
+            if probe_type == 'r':
+                def intercept_fn(x, out=None, context=None):
+                    if hasattr(x, 'grad'):
+                        out[context.module.name] = x.grads
+                    return x
+            if probe_type == 'w':
+                assert intercept_fn is not None, "Must provide interceptor function if modifying gradients"
+
+        def interceptor(output): 
+            interceptor = partial(general_interceptor, partial(intercept_fn, out=output), user_context, execution_order) 
+            return interceptor
+        return interceptor
+
+    return 'sort your life out'
+
+probes = create_probe(hk.Linear, 'r', 'gradients', execution_order='before')
+prober = partial(probe_manager, [probes])
 model = HaikuAutoInit(cfg, SimpleLinear, prober=prober)
 rng_key = hk.PRNGSequence(12392)
-out, state = model(jax.random.normal(next(rng_key), (28, 3)))
-print('\n', out, '\n') 
+inp = jax.random.normal(next(rng_key), (2, 3))
+out, state = model(inp)
+
+print('\n grad pass \n')
+losses, other, (frozen_params, trainable_params), (frozen_state, trainable_state), opt_state = model.train(inp)
+[print(k, v.shape) for k, v in other.items()]
+exit()
+jax.grad(out)
+# print(jnp.equal(out['out'], out['linear']).all())
 
 
     # def load(self, params):
