@@ -4,7 +4,7 @@ import os
 import random
 
 import jax.numpy as jnp
-import torch
+# import torch
 
 import subprocess
 import os
@@ -16,7 +16,7 @@ def seed(seed=42):
     np.random.seed(seed)
   
     # -- Pytorch --
-    torch.manual_seed(seed)
+    # torch.manual_seed(seed)
     #   The following may slightly slow down training:
     #   torch.use_deterministic_algorithms(True)
     #   os.environ['CUBLAS_WORKSPACE_CONFIG']=':4096:8' # see https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
