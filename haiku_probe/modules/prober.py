@@ -149,21 +149,11 @@ def create_probe(user_context, probe_type, target_type, intercept_fn=None, execu
             # params are :
             # hk.Linear, 'r', 'gradients', execution_order='before'
             # User context will be layer name or type
-                # if not hk.running_init():
-                    # if context_matched(user_context, context):
-                        # out[context.module.name] = value#.astype(jnp.float16)
-            # return  GradientProbe(lambda x: print(x)) 
-            return GradientProbe(user_context, lambda x: print("fish monger", x.shape))
+            def weight_update(weight):
+                print('fish', weight.shape)
+                return weight*2.0
+            return GradientProbe(user_context, weight_update)
 
-
-        # if probe_type == 'w':
-        #     def write_probe(output):
-        #         def param_setter(next_setter, value, orig_dtype, context, out=None):
-        #             if not hk.running_init():
-        #                 if context_matched(user_context, context):
-        #                     # apply intercept_fn
-        #                     out[context.module.name] = value
-        #             return next_setter(*value)
 
     if target_type in ['activations']:
         if target_type == 'activations':
