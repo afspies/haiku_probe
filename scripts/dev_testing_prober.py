@@ -15,7 +15,7 @@ class SimpleLinear(TestingNetwork):
         x = hk.Linear(self.cfg['linear'], name="layer2", with_bias=False)(x)
         return x
 
-probes = create_probe(hk.Conv2D, 'r', 'gradients', execution_order='before')
+probes = create_probe('layer2', 'r', 'gradients', execution_order='before')
 probes = [probes]
 model = HaikuAutoInit(cfg, SimpleLinear, probes=probes)
 rng_key = hk.PRNGSequence(12392)

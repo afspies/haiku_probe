@@ -46,6 +46,8 @@ def context_matched(user_context, prober_context):
 
     # Targeting a specific layer
     if isinstance(user_context, str): 
+        if isinstance(prober_context, str):
+            return match_param_names(user_context, prober_context)
         return user_context not in prober_context.full_name
 
     # Targeting all modules of a specific form 

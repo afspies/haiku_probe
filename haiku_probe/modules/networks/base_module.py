@@ -120,7 +120,7 @@ class HaikuAutoInit(object):
                                                                                         frozen_state, trainable_state,
                                                                                         rng_key, batch)
         train_grads, probe_grads = self._apply_gradient_probes(self.grad_probes, train_grads)
-        if probe_grads: other['grad_probes'] = probe_grads
+        if len(self.grad_probes) > 0: other['grad_probes'] = probe_grads
         updates, opt_state = self.opt_update(train_grads, opt_state, trainable_params)
         trainable_params = optax.apply_updates(trainable_params, updates)
         # other = (other, train_grads)
@@ -155,7 +155,33 @@ class HaikuAutoInit(object):
         out_grads = None
         for probe in probes:
             if isinstance(probe, GradientProbe):
-                out_grads = hk.data_structures.map(probe, grads)
+                out_grads = map_and_filter(probe, grads)
                 print('result of filtering', out_grads)
         return grads, out_grads
+
+from haiku.data_structures import traverse, to_haiku_dict
+from collections import defaultdict
+def map_and_filter(fn, structure):
+    """Maps a function to an input structure accordingly.
+    >>> params = {'linear': {'w': 1.0, 'b': 2.0}}
+    >>> fn = lambda module_name, name, value: 2 * value if name == 'w' else value
+    >>> hk.data_structures.map(fn, params)
+    {'linear': {'b': 2.0, 'w': 2.0}}
+    Note: returns a new structure not a view.
+    Args:
+        fn: criterion to be used to map the input data.
+        The ``fn`` argument is expected to be a function taking as inputs the
+        name of the module, the name of a given entry in the module data bundle
+        (e.g. parameter name) and the corresponding data, and returning a new
+        value.
+        structure: Haiku params or state data structure to be mapped.
+    Returns:
+        All the input parameters or state as mapped by the input fn.
+    """
+    out = defaultdict(dict)
+    for module_name, name, value in traverse(structure):
+        mapped_out = fn(module_name, name, value)
+        if mapped_out is not None:
+            out[module_name][name] = mapped_out
+    return to_haiku_dict(out)
 # ---------------------------------------------------------------------------------------------------------------------
