@@ -121,7 +121,6 @@ class GradientProbe():
             # print('mismatched with context, expected', self.context, 'got', next(iter(inp.keys())))
             # return inp
         if context_matched(self.context, module_name):
-        # print('happy match - probe got', inp)
             return self.apply_fn(value)
         
     
@@ -152,8 +151,7 @@ def create_probe(user_context, probe_type, target_type, intercept_fn=None, execu
             # hk.Linear, 'r', 'gradients', execution_order='before'
             # User context will be layer name or type
             def weight_update(weight):
-                print('fish', weight.shape)
-                return weight*2.0
+                return weight*4.0
             return GradientProbe(user_context, weight_update)
 
 

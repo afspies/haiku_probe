@@ -113,7 +113,7 @@ class HaikuAutoInit(object):
     def train(self, batch):
         return self.update(None, self.params, None, self.state, next(self.rngseq), self.opt_state, batch)
 
-    # @partial(jax.jit, static_argnums=(0,)) 
+    @partial(jax.jit, static_argnums=(0,)) 
     def update(self, frozen_params, trainable_params, frozen_state, trainable_state, rng_key, opt_state, batch):
         """Learning rule (stochastic gradient descent)."""
         train_grads, (losses, trainable_state, other) = jax.grad(self._loss, 1, has_aux=True)(frozen_params, trainable_params, 
@@ -151,12 +151,10 @@ class HaikuAutoInit(object):
     def _apply_gradient_probes(self, probes, grads):
         # Shall I apply all probes across all grads, or all probes for each grad?
         # All probes across all grads for easier accumulation?
-        print('applying grads')
         out_grads = None
         for probe in probes:
             if isinstance(probe, GradientProbe):
                 out_grads = map_and_filter(probe, grads)
-                print('result of filtering', out_grads)
         return grads, out_grads
 
 from haiku.data_structures import traverse, to_haiku_dict

@@ -1,5 +1,6 @@
 import haiku as hk
 import jax
+import jax.numpy as jnp
 from haiku_probe.modules.networks import TestingNetwork, HaikuAutoInit
 from haiku_probe.modules.prober import create_probe
 
@@ -28,4 +29,4 @@ losses, other, (frozen_params, trainable_params), (frozen_state, trainable_state
 
 print(other.keys())
 [print(k, v['w'].shape) for k, v in other['grad_probes'].items()]
-exit()
+print(jnp.sum(jnp.abs(list(other['grad_probes'].values())[0]['w'])))
