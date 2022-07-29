@@ -75,15 +75,13 @@ def print_f_bwd(fun, res, grad):
     print('bwd', grad)
     return fun(x),
 
-# print_f.defvjp(print_f_fwd, print_f_bwd)
+print_f.defvjp(print_f_fwd, print_f_bwd)
 
 def general_interceptor(applied_function, user_context, ordering, # Apply Closure
                         next_f, args, kwargs, context): # Intercepted at runtime
     if not context_matched(user_context, context):
         return next_f(*args, **kwargs)
     
-    print(args)
-
     if ordering == 'before':
         args, kwargs = jax.tree_map(partial(applied_function, context=context), (args, kwargs))
         x = args[0]
@@ -110,9 +108,6 @@ class GradientProbe():
     
     def __call__(self, module_name, name, value):
         """
-        Filtering function can only decide whether to retur entire subtree early,
-        so also need to match subtree name here
-        
         module name is full name, e.g. parent/child/linear1 
         name is param leaf name ,e.g. w or b
         """
@@ -126,6 +121,8 @@ class GradientProbe():
     
 
 def create_probe(user_context, probe_type, target_type, intercept_fn=None, execution_order='before'):
+    assert not(probe_type=='w' and intercept_fn is None)
+
     if target_type in ['params', 'state']:
         if probe_type == 'r':
             def read_probe(output):
@@ -140,37 +137,24 @@ def create_probe(user_context, probe_type, target_type, intercept_fn=None, execu
             pass
     
     if target_type == 'gradients':
+        """
+        Gradient functions will be mapped aross the jax tree of gradients
+        They are provided with the name of the params to which they are being applied
+        and can manipulate values in-place, or append to a returned tree datastructre (the third arg)
+        """
         if probe_type == 'r':
-            # def read_probe(output):
-            """
-            Gradient functions will be mapped aross the jax tree of gradients
-            They are provided with the name of the params to which they are being applied
-            and can manipulate values in-place, or append to a returned tree datastructre (the third arg)
-            """
-            # params are :
-            # hk.Linear, 'r', 'gradients', execution_order='before'
-            # User context will be layer name or type
-            def weight_update(weight):
-                return weight*4.0
-            return GradientProbe(user_context, weight_update)
+            intercept_fn = lambda x: x
+        return GradientProbe(user_context, intercept_fn)
 
-
-    if target_type in ['activations']:
-        if target_type == 'activations':
-            if probe_type == 'r':
-                def intercept_fn(x, out=None, context=None):
-                    out[context.module.name] = x
-                    return x
-            if probe_type == 'w':
-                assert intercept_fn is not None, "Must provide interceptor function if modifying activations"
-        else:
-            if probe_type == 'r':
-                def intercept_fn(x, out=None, context=None):
-                    if hasattr(x, 'grad'):
-                        out[context.module.name] = x.grads
-                    return x
-            if probe_type == 'w':
-                assert intercept_fn is not None, "Must provide interceptor function if modifying gradients"
+    if target_type == 'activations':
+        if probe_type == 'r':
+            def intercept_fn(x, out=None, context=None):
+                if 'activations' not in out:
+                    out['activations'] = {}
+                out['activations'][context.module.name] = x
+                return x
+        if probe_type == 'w':
+            assert intercept_fn is not None, "Must provide interceptor function if modifying activations"
 
         def interceptor(output): 
             interceptor = partial(general_interceptor, partial(intercept_fn, out=output), user_context, execution_order) 

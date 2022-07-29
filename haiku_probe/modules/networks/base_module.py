@@ -19,7 +19,7 @@ def forward_fn(x, training, analysis, net=None, cfg=None, prober=None):
         net_out = net(cfg)(x, training, analysis)
         if not isinstance(net_out, dict):
             net_out = {'out': net_out}
-        out.update(net_out) 
+        out.update(net_out)
     return out
 
 class AbstractNetwork(hk.Module):
@@ -134,20 +134,6 @@ class HaikuAutoInit(object):
         #other should be a dict of k: values where values get logged to wandb
         return loss, (loss, state, x) #if 'other' in x.keys() else N
 
-
-    # @staticmethod
-    # def filter_by_layer(current_layer): #, target_layer): 
-    #     """
-    #     Function acts as a filter for the "is_leaf" argument of the jax treemap function
-    #         current_layer is the pytree passed by the map function
-    #         target_layer can be a string or layermodule
-    #     """
-    #     fn = lambda module_name, name, value: 2 * value if name == 'w' else value
-    #     if isinstance(current_layer, dict):
-    #         if 'simple_linear/layer2' in current_layer.keys(): # Target Layer
-    #             return True # Treat this as a leaf - the children include our target
-    #     return False # Need to recurse deeper
-
     def _apply_gradient_probes(self, probes, grads):
         # Shall I apply all probes across all grads, or all probes for each grad?
         # All probes across all grads for easier accumulation?
@@ -160,22 +146,8 @@ class HaikuAutoInit(object):
 from haiku.data_structures import traverse, to_haiku_dict
 from collections import defaultdict
 def map_and_filter(fn, structure):
-    """Maps a function to an input structure accordingly.
-    >>> params = {'linear': {'w': 1.0, 'b': 2.0}}
-    >>> fn = lambda module_name, name, value: 2 * value if name == 'w' else value
-    >>> hk.data_structures.map(fn, params)
-    {'linear': {'b': 2.0, 'w': 2.0}}
-    Note: returns a new structure not a view.
-    Args:
-        fn: criterion to be used to map the input data.
-        The ``fn`` argument is expected to be a function taking as inputs the
-        name of the module, the name of a given entry in the module data bundle
-        (e.g. parameter name) and the corresponding data, and returning a new
-        value.
-        structure: Haiku params or state data structure to be mapped.
-    Returns:
-        All the input parameters or state as mapped by the input fn.
-    """
+    # Map function across haiku datastructure, and filter any leaves where
+    # the function returns None
     out = defaultdict(dict)
     for module_name, name, value in traverse(structure):
         mapped_out = fn(module_name, name, value)
@@ -183,3 +155,16 @@ def map_and_filter(fn, structure):
             out[module_name][name] = mapped_out
     return to_haiku_dict(out)
 # ---------------------------------------------------------------------------------------------------------------------
+
+# @staticmethod
+# def filter_by_layer(current_layer): #, target_layer): 
+#     """
+#     Function acts as a filter for the "is_leaf" argument of the jax treemap function
+#         current_layer is the pytree passed by the map function
+#         target_layer can be a string or layermodule
+#     """
+#     fn = lambda module_name, name, value: 2 * value if name == 'w' else value
+#     if isinstance(current_layer, dict):
+#         if 'simple_linear/layer2' in current_layer.keys(): # Target Layer
+#             return True # Treat this as a leaf - the children include our target
+#     return False # Need to recurse deeper

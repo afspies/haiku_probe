@@ -16,16 +16,19 @@ class SimpleLinear(TestingNetwork):
         x = hk.Linear(self.cfg['linear'], name="layer2", with_bias=False)(x)
         return x
 
-probes = create_probe('layer2', 'r', 'gradients', execution_order='before')
-probes = [probes]
+# probe1 = create_probe('layer2', 'w', 'gradients', execution_order='before', intercept_fn=lambda x: x*2)
+probe1 = create_probe('layer1', 'r', 'params', execution_order='before', intercept_fn=lambda x: x*2)
+probe2 = create_probe(hk.Linear, 'r', 'activations', execution_order='before')
+probes = [probe1, probe2]
+# probes = [probe2]
 model = HaikuAutoInit(cfg, SimpleLinear, probes=probes)
 rng_key = hk.PRNGSequence(12392)
 inp = jax.random.normal(next(rng_key), (2, 3))
 out, state = model(inp)
 
 print('\n grad pass \n')
+print(out['activations'])
 losses, other, (frozen_params, trainable_params), (frozen_state, trainable_state), opt_state = model.train(inp)
-# print(trainable_params)
 
 print(other.keys())
 [print(k, v['w'].shape) for k, v in other['grad_probes'].items()]
