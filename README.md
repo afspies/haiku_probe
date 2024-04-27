@@ -1,8 +1,7 @@
 ## haiku_probe
-Based on shablona.
+Tools for probing/intervening on forward passes on Haiku models through the use of Nested ContextManagers.
 
-Implement a number of helpful wrappers for Haiku which facilitate:
+Also implement a number of helpful wrappers for Haiku which facilitate:
  - Local and remote (via wandb) logging
  - Straight forward model initialization
  - Parameter loading and checkpointing
-
